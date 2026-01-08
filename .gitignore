@@ -1,0 +1,86 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+*.whl
+
+# Poetry
+poetry.lock
+
+# Virtual environments
+.env
+.venv/
+venv/
+ENV/
+env/
+.venv/
+venv.bak/
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# Logs and databases
+*.log
+*.sqlite3
+*.db
+
+# macOS
+.DS_Store
+
+# Linux
+*.swp
+
+# Test / coverage reports
+.coverage
+htmlcov/
+.tox/
+.nox/
+.coverage.*
+.cache
+pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Redis / temp files
+*.rdb
+*.dump
+
+# FastAPI / Uvicorn specific
+*.pid
+*.sock
+
+# Static / uploads (if not versioned)
+static/uploads/
+media/
+
+# Ignore pycache in all directories
+**/__pycache__/
+
+
+# scrapper
+scrapper.py
