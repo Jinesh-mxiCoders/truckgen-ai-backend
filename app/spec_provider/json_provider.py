@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 CATEGORY_MAP = {
     "stationary_pump": "Stationary Pumps",
     "boom_pump": "Boom Pumps",
-    "loop_belt": "Loop Belt",
+    "loop_belt": "Loop Belts",
     "placing_boom" : "Placing Booms"
 }
 

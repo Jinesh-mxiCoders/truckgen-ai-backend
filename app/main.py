@@ -1,23 +1,31 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.core.startup import check_db_connection, is_redis_connected
 from app.rag.vectorstore import vector_store
-from app.api.v1.chat import router as chat_router
-from app.api.v1.ingest_json import router as ingest_json_router
-from fastapi.staticfiles import StaticFiles
-from app.middleware.app_token import AppTokenMiddleware
+from app.middleware.app_token import AppTokenDependency
+from app.modules.auth.middleware import AuthDependency
+from app.handlers.exception_handlers import http_exception_handler
+from app.api.v1 import api_v1_router
 
-app = FastAPI(title="TuckGen AI ", version="0.1.0")
+app = FastAPI(
+    title="TuckGen AI ", 
+    version="0.1.0",
+    dependencies=[
+        Depends(AppTokenDependency()),
+        Depends(AuthDependency())
+    ]
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.add_middleware(AppTokenMiddleware)
+app.add_exception_handler(HTTPException, http_exception_handler)
 
 app.mount(
     "/static",
@@ -32,5 +40,4 @@ def startup():
     is_redis_connected()
     vector_store.init_pgvector()
 
-app.include_router(chat_router, prefix="/api/v1")
-app.include_router(ingest_json_router, prefix="/api/v1")
+app.include_router(api_v1_router, prefix="/api/v1")

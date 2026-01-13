@@ -4,7 +4,7 @@ from app.schemas.chat import ChatRequest, ChatResponse
 from pathlib import Path
 from app.rag.knowledge_loader import KnowledgeLoader
 
-router = APIRouter()
+router = APIRouter(tags=["Ingest"])
 
 @router.post("/ingest-default-json")
 def ingest_default_json():

@@ -1,10 +1,9 @@
 from fastapi import HTTPException
 from app.conversation.state.states import ConversationStage, ProductType
 from app.conversation.state.spec_templates import PRODUCT_SPEC_TEMPLATES
-from app.conversation.prompts import (
+from app.conversation.chatbot_prompts import (
     WELCOME_MESSAGE,
     PRODUCT_QUESTIONS,
-    PRODUCT_CONFIRMATION,
 )
 from app.rag.context_builder import RAGContextBuilder
 from app.conversation.dependencies import (
@@ -97,10 +96,9 @@ class ConversationEngine:
                         session["stage"] = ConversationStage.MODEL_RECOMMENDATION
                         recommendations = ModelMatchResolver().resolve(
                                 collected_data=session["data"],
-                                top_k=5
+                                top_k=3
                             )
 
-                        print("recommendations", recommendations)
                         return EngineResponse(
                             action=EngineAction.MODEL_RECOMMENDATION,
                             message=f"Based on your inputs, here are the recommended {session['product']} models. You can review and compare their specifications in the table below. Please type the model name to view images.",
@@ -113,7 +111,7 @@ class ConversationEngine:
                         message=PRODUCT_QUESTIONS[product][next_field]
                     )
 
-                # ---- RAG (read-only) ----
+                # ---- RAG (read only) ----
                 retrieval_result = await self.retriever.retrieve_constraint_fields(
                     query=user_message,
                     product_type=product,
@@ -141,7 +139,7 @@ class ConversationEngine:
 
                 intent = agent_output["intent"]
 
-                if intent in {"ANSWER_USER_QUESTION", "CLARIFY", "INVALID"}:
+                if intent in {"ANSWER_USER_QUESTION", "CLARIFY", "INVALID", "ASK_QUESTION"}:
                     return EngineResponse(
                         action=EngineAction.REPLY,
                         message=agent_output["reply"]
@@ -187,6 +185,21 @@ class ConversationEngine:
                             action=EngineAction.ASK,
                             message=PRODUCT_QUESTIONS[product][next_field]
                         )
+                    
+                    else:
+                        session["stage"] = ConversationStage.MODEL_RECOMMENDATION
+                        recommendations = ModelMatchResolver().resolve(
+                                collected_data=session["data"],
+                                top_k=3
+                            )
+
+                        print("recommendations", recommendations)
+                        return EngineResponse(
+                            action=EngineAction.MODEL_RECOMMENDATION,
+                            message=f"Based on your inputs, here are the recommended {session['product']} models. You can review and compare their specifications in the table below. Please type the model name to view images.",
+                            payload=recommendations
+                        )
+
 
             # =====================================================
             # 4. MODEL RECOMMENDATION if not recommend
@@ -195,7 +208,7 @@ class ConversationEngine:
                 print("model recommneding.......")
                 recommendations = ModelMatchResolver().resolve(
                     collected_data=session["data"],
-                    top_k=5
+                    top_k=3
                 )
 
                 return EngineResponse(
@@ -260,149 +273,4 @@ class ConversationEngine:
                 detail="Internal server error while processing chat",
             ) from e
 
-    async def process_with_QA(self, session: dict, user_message: str) -> tuple[str, bool]:
-        try:
-            stage = session["stage"]
-            product = session.get("product")
-            data = session.get("data", {})
-            current_field = session.get("current_field")
-
-            # -----------------------------
-            # 1. WELCOME
-            # -----------------------------
-            if stage == ConversationStage.WELCOME:
-                session["stage"] = ConversationStage.PRODUCT_SELECTION
-                return WELCOME_MESSAGE, False
-
-            # -----------------------------
-            # 2. PRODUCT SELECTION
-            # -----------------------------
-            if stage == ConversationStage.PRODUCT_SELECTION:
-                normalized = user_message.lower()
-                mapping = {
-                    "boom": ProductType.BOOM_PUMP,
-                    "stationary": ProductType.STATIONARY_PUMP,
-                    "placing": ProductType.PLACING_BOOM,
-                    "loop": ProductType.LOOP_BELT,
-                }
-
-                for key, prod in mapping.items():
-                    if key in normalized:
-                        session["product"] = prod
-                        session["stage"] = ConversationStage.REQUIREMENT_COLLECTION
-                        session["current_field"] = None
-
-                        next_field = self._next_missing_field(prod, {})
-                        session["current_field"] = next_field
-                        return PRODUCT_QUESTIONS[prod][next_field], False
-
-                return "Please select one of the listed product categories.", False
-
-            # -----------------------------
-            # 3. REQUIREMENT COLLECTION
-            # -----------------------------
-            if stage == ConversationStage.REQUIREMENT_COLLECTION:
-                if current_field is None:
-                    next_field = self._next_missing_field(product, data)
-                    if not next_field:
-                        session["stage"] = ConversationStage.COMPLETE
-                        return "All requirements collected. Ready to generate the image.", True
-
-                    session["current_field"] = next_field
-                    return PRODUCT_QUESTIONS[product][next_field], False
-
-                # ---- RAG (read-only) ----
-                retrieval_result = await self.retriever.retrieve(
-                    query=user_message,
-                    # product_type=product,
-                    field_key=current_field,
-                    mode="qa",
-                    top_k=200,
-                )
-
-                rag_context = RAGContextBuilder._build_llm_context(
-                    grouped=retrieval_result.get("grouped", {}))
-                print("llm rag_context")
-                print(rag_context)
-
-                return 0
-
-                agent_output = TurnIntentInterpreter().interpret(
-                    stage=stage,
-                    product=product,
-                    current_field=current_field,
-                    data=data,
-                    user_message=user_message,
-                    rag_context=rag_context,
-                )
-                print("agent_output", agent_output)
-
-                intent = agent_output["intent"]
-
-                if intent in {"ANSWER_USER_QUESTION", "CLARIFY", "INVALID"}:
-                    return agent_output["reply"], False
-
-                if intent == "ANSWER_FIELD":
-                    field = agent_output["field"]
-                    value = agent_output["value"]
-
-                    if field != current_field:
-                        return PRODUCT_QUESTIONS[product][current_field], False
-
-                    # Basic validation
-                    valid, error = self.field_constraint_validator.validate(
-                        field, value)
-                    if not valid:
-                        return f"{error} {PRODUCT_QUESTIONS[product][field]}", False
-
-                    # RAG validation
-                    rag_valid, rag_error = self.rag_validator.validate(
-                        product=product,
-                        field=field,
-                        value=value,
-                    )
-                    if not rag_valid:
-                        return f"{rag_error} {PRODUCT_QUESTIONS[product][field]}", False
-
-                    # Save fields in session
-                    data[field] = value
-                    session["current_field"] = None
-
-                    # Ask next or complete
-                    next_field = self._next_missing_field(product, data)
-                    if next_field:
-                        session["current_field"] = next_field
-                        return PRODUCT_QUESTIONS[product][next_field], False
-
-                    session["stage"] = ConversationStage.COMPLETE
-                    return "All requirements collected. Ready to generate the image.", True
-
-            # =====================================================
-            # 4. COMPLETE
-            # =====================================================
-            return "Configuration complete.", True
-
-        except Exception as e:
-            print("CONVERSATION ENGINE ERROR:", e)
-            raise HTTPException(
-                status_code=500,
-                detail="Internal server error while processing chat",
-            ) from e
-
-
 conversation_engine = ConversationEngine()
-
-# # Basic validation
-# valid, error = self.field_constraint_validator.validate(field, value)
-# if not valid:
-#     return f"{error} {PRODUCT_QUESTIONS[product][field]}", False
-
-# # RAG validation
-# rag_valid, rag_error = self.rag_validator.validate(
-#     product=product,
-#     field=field,
-#     value=value,
-#     top_k=200,
-# )
-# if not rag_valid:
-#     return f"{rag_error} {PRODUCT_QUESTIONS[product][field]}", False

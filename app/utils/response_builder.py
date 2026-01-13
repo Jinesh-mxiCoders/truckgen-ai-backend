@@ -1,5 +1,5 @@
 from app.schemas.api_response import APIResponse
-
+from fastapi.encoders import jsonable_encoder
 
 class ResponseBuilder:
     @staticmethod
@@ -8,7 +8,7 @@ class ResponseBuilder:
             status="success",
             status_code=code,
             message=message,
-            data=data
+            data=jsonable_encoder(data)
         )
 
     @staticmethod

@@ -1,5 +1,5 @@
 from email.mime import text
-from app.core.database import Database
+from app.core.database import Database, Base
 from sqlalchemy import text
 from app.core.redis import Redis
 
@@ -9,6 +9,7 @@ def check_db_connection():
     try:
         with db.engine.connect() as conn:
             conn.execute(text("SELECT 1"))
+        print(Base.metadata.tables.keys())
         print("✅ Database connected successfully")
     except Exception as e:
         print("❌ Database connection failed:", e)

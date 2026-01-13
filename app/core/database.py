@@ -34,3 +34,5 @@ class Database:
 
 class Base(DeclarativeBase):
     pass
+
+db_instance = Database()
