@@ -20,7 +20,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.BASE_URL, "http://localhost:5173"],
+    allow_origins=["https://mxicoders.co", "http://mxicoders.co", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,6 +39,6 @@ app.mount(
 def startup():
     check_db_connection()
     is_redis_connected()
-    vector_store.init_pgvector()
+    # vector_store.init_pgvector()
 
 app.include_router(api_v1_router, prefix="/api/v1")
