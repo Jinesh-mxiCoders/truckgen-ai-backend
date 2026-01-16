@@ -7,6 +7,7 @@ from app.middleware.app_token import AppTokenDependency
 from app.modules.auth.middleware import AuthDependency
 from app.handlers.exception_handlers import http_exception_handler
 from app.api.v1 import api_v1_router
+from config import settings
 
 app = FastAPI(
     title="TuckGen AI ", 
@@ -19,7 +20,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[settings.BASE_URL, "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
