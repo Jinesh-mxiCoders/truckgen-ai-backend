@@ -22,10 +22,50 @@ class ConversationEngine:
     Orchestrates conversation flow and state transitions.
     """
 
+    # -------------------------------
+    # Product keyword definitions
+    # -------------------------------
+    PRODUCT_KEYWORDS = {
+        ProductType.PLACING_BOOM: ["placing boom", "placing booms", "boom placer", "boom placing", "plcing boom", "placing-bom"],
+        ProductType.BOOM_PUMP: ["boom pump", "boom", "booms", "boom pumps","boom-pump", "bump", "boomp",],
+        ProductType.STATIONARY_PUMP: ["stationary pump", "stationary pumps", "stationary", "stat pump", "fixed pump", "immobile pump"],
+        ProductType.LOOP_BELT: ["loop belt", "loop", "loop belts", "belt loop", "belt", "belt conveyor", "conveyor loop","loop conveyor"],
+    }
+
     def __init__(self):
         self.retriever = retriever
         self.field_constraint_validator = field_constraint_validator
         self.rag_validator = rag_validator
+        self.PRODUCT_PATTERNS = self._build_product_patterns()
+
+    # -------------------------------
+    # Utilities
+    # -------------------------------
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        """Normalize user input for consistent matching."""
+        return re.sub(r"\s+", " ", text.lower().strip())
+
+    def _build_product_patterns(self):
+        """
+        Build regex patterns for all products.
+        Sorted by longest phrase first (more specific matches first)
+        """
+        patterns = []
+        for product, phrases in self.PRODUCT_KEYWORDS.items():
+            for phrase in phrases:
+                escaped = re.escape(phrase).replace(r"\ ", r"\s+")
+                patterns.append((product, rf"\b{escaped}\b", len(phrase)))
+        patterns.sort(key=lambda x: x[2], reverse=True)
+        return patterns
+
+    def detect_product(self, user_message: str):
+        """Detect product from user message using patterns."""
+        normalized = self._normalize_text(user_message)
+        for product, pattern, _ in self.PRODUCT_PATTERNS:
+            if re.search(pattern, normalized):
+                return product
+        return None
 
     def _next_missing_field(self, product: ProductType, data: dict) -> str | None:
         for field in PRODUCT_SPEC_TEMPLATES[product]:
@@ -55,29 +95,20 @@ class ConversationEngine:
             # 2. PRODUCT SELECTION
             # -----------------------------
             if stage == ConversationStage.PRODUCT_SELECTION:
-                normalized = user_message.lower()
-                mapping = {
-                    "boom": ProductType.BOOM_PUMP,
-                    "stationary": ProductType.STATIONARY_PUMP,
-                    "placing": ProductType.PLACING_BOOM,
-                    "loop": ProductType.LOOP_BELT,
-                }
+                product = self.detect_product(user_message)
 
-                for key, prod in mapping.items():
-                    if key in normalized:
-                        session["product"] = prod
-                        session["stage"] = ConversationStage.REQUIREMENT_COLLECTION
-                        session["data"] = {}
+                if product:
+                    session["product"] = product
+                    session["stage"] = ConversationStage.REQUIREMENT_COLLECTION
+                    session["data"] = {}
 
-                        next_field = self._next_missing_field(prod, {})
-                        session["current_field"] = next_field
-                        return EngineResponse(
-                            action=EngineAction.ASK,
-                            message=PRODUCT_QUESTIONS[prod][next_field],
-                            payload={
-                                "product": prod.value
-                            }
-                        )
+                    next_field = self._next_missing_field(product, {})
+                    session["current_field"] = next_field
+                    return EngineResponse(
+                        action=EngineAction.ASK,
+                        message=PRODUCT_QUESTIONS[product][next_field],
+                        payload={ "product": product.value }
+                    )
                     
                 return EngineResponse(
                     action=EngineAction.ASK,
